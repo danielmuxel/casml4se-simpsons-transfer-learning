@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime
 
 from train_simpsons_optimized import TrainingConfig, train_from_config
 
@@ -30,7 +31,12 @@ CM_FILE = "confusion_matrix.npy"         # base name; per-mode suffixes will be 
 
 
 def main() -> None:
+    total_start = datetime.now()
+    print(f"\n=== Overall run start: {total_start.isoformat()} ===")
+
     for mode in FINETUNE_MODES:
+        mode_start = datetime.now()
+        print(f"\n=== Training start ({mode}): {mode_start.isoformat()} ===")
         cfg = TrainingConfig(
             data_dir=DATA_DIR,
             models_dir=MODELS_DIR,
@@ -54,7 +60,24 @@ def main() -> None:
 
         print(f"\n=== Training configuration: finetune_mode={mode} ===")
         metrics = train_from_config(cfg)
-        print({"mode": mode, "best_val_acc": metrics["best_val_acc"], "num_classes": metrics["num_classes"]})
+        mode_end = datetime.now()
+        mode_delta = mode_end - mode_start
+        mode_secs = mode_delta.total_seconds()
+        print({
+            "mode": mode,
+            "best_val_acc": metrics["best_val_acc"],
+            "num_classes": metrics["num_classes"],
+            "start": mode_start.isoformat(),
+            "end": mode_end.isoformat(),
+            "duration": str(mode_delta),
+            "duration_seconds": round(mode_secs, 3),
+        })
+
+    total_end = datetime.now()
+    total_delta = total_end - total_start
+    total_secs = total_delta.total_seconds()
+    print(f"\n=== Overall run end:   {total_end.isoformat()} ===")
+    print(f"=== Overall duration: {total_delta} ({total_secs:.3f}s) ===")
 
 
 if __name__ == "__main__":

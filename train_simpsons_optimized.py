@@ -10,6 +10,7 @@ import json
 import random
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -230,6 +231,7 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
     logger.addHandler(fh)
     logger.addHandler(sh)
 
+    start_dt = datetime.now()
     logger.info("Starting training run")
     logger.info(
         "Config: mode=%s, epochs=%d, batch_size=%d, lr_head=%.1e, lr_backbone=%.1e, wd=%.1e",
@@ -241,6 +243,7 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
         cfg.weight_decay,
     )
     logger.info("Data: train_dir=%s val_dir=%s", str(cfg.train_dir), str(cfg.val_dir))
+    logger.info("Run start timestamp: %s", start_dt.isoformat())
 
     # Prepare data
     train_tfms, val_tfms = build_transforms(cfg)
@@ -305,6 +308,9 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
     best_model_path = cfg.models_dir / cfg.best_model_filename
 
     for epoch in range(1, cfg.epochs + 1):
+        epoch_start = datetime.now()
+
+        train_start = datetime.now()
         train_loss, train_acc, _, _ = run_epoch(
             model,
             train_loader,
@@ -318,7 +324,9 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
             amp_dtype=amp_dtype,
             scaler=scaler,
         )
+        train_end = datetime.now()
 
+        val_start = datetime.now()
         val_loss, val_acc, y_true_last, y_pred_last = run_epoch(
             model,
             val_loader,
@@ -332,6 +340,17 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
             amp_dtype=amp_dtype,
             scaler=scaler,
         )
+        val_end = datetime.now()
+
+        # Timings and throughput
+        train_secs = max((train_end - train_start).total_seconds(), 1e-6)
+        val_secs = max((val_end - val_start).total_seconds(), 1e-6)
+        epoch_end = datetime.now()
+        epoch_secs = max((epoch_end - epoch_start).total_seconds(), 1e-6)
+        train_imgs = len(train_ds)
+        val_imgs = len(val_ds)
+        train_ips = train_imgs / train_secs
+        val_ips = val_imgs / val_secs
 
         scheduler.step(val_loss)
         logger.info(
@@ -341,6 +360,24 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
             train_acc,
             val_loss,
             val_acc,
+        )
+        logger.info(
+            (
+                "Epoch %02d time | "
+                "train: %s -> %s (%.2fs, %.1f img/s) | "
+                "val: %s -> %s (%.2fs, %.1f img/s) | "
+                "total: %.2fs"
+            ),
+            epoch,
+            train_start.isoformat(),
+            train_end.isoformat(),
+            train_secs,
+            train_ips,
+            val_start.isoformat(),
+            val_end.isoformat(),
+            val_secs,
+            val_ips,
+            epoch_secs,
         )
 
         if val_acc > best_val_acc:
@@ -370,6 +407,11 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
         str(best_model_path),
         str(cm_path),
     )
+
+    end_dt = datetime.now()
+    duration = end_dt - start_dt
+    logger.info("Run end timestamp: %s", end_dt.isoformat())
+    logger.info("Run duration: %s (%.3fs)", str(duration), duration.total_seconds())
 
     return {
         "best_val_acc": float(best_val_acc),
