@@ -1,13 +1,20 @@
 from pathlib import Path
 from datetime import datetime
 
-from train_simpsons_optimized import TrainingConfig, train_from_config
+from train_simpsons_optimized import (
+    TrainingConfig,
+    train_from_config,
+    run_inference_on_kaggle_testset,
+    run_inference_on_folder,
+)
 
 # -----------------------------
 # Simple training variables
 # -----------------------------
 DATA_DIR = Path("data/processed")
 MODELS_DIR = Path("models")
+INFER_INPUT_DIR = Path("data/inference/input")
+INFER_OUTPUT_DIR = Path("data/inference/output")
 
 SEED = 42
 BATCH_SIZE = 32
@@ -16,9 +23,13 @@ RESIZE = 256
 IMG_SIZE = 224
 USE_COLOR_JITTER = True
 
-EPOCHS = 10
+EPOCHS = 1
 EARLY_STOP = 5
 FINETUNE_MODES = ["linear_probe", "last2_blocks", "full"]  # three configurations
+
+# Execution controls
+RUN_TRAINING = True
+RUN_INFERENCE = True
 
 LR_BACKBONE = 3e-4
 LR_HEAD = 1e-3
@@ -36,7 +47,15 @@ def main() -> None:
 
     for mode in FINETUNE_MODES:
         mode_start = datetime.now()
-        print(f"\n=== Training start ({mode}): {mode_start.isoformat()} ===")
+        if RUN_TRAINING and RUN_INFERENCE:
+            print(f"\n=== Training + Inference start ({mode}): {mode_start.isoformat()} ===")
+        elif RUN_TRAINING and not RUN_INFERENCE:
+            print(f"\n=== Training only start ({mode}): {mode_start.isoformat()} ===")
+        elif RUN_INFERENCE and not RUN_TRAINING:
+            print(f"\n=== Inference only start ({mode}): {mode_start.isoformat()} ===")
+        else:
+            print(f"\n=== Both training and inference disabled for mode '{mode}'. Skipping. ===")
+            continue
         cfg = TrainingConfig(
             data_dir=DATA_DIR,
             models_dir=MODELS_DIR,
@@ -57,21 +76,44 @@ def main() -> None:
             cm_filename=f"confusion_matrix_{mode}.npy",
             log_filename=f"training_{mode}.log",
         )
+        print(f"\n=== Configuration: finetune_mode={mode} ===")
+        if RUN_TRAINING:
+            metrics = train_from_config(cfg)
+            mode_end = datetime.now()
+            mode_delta = mode_end - mode_start
+            mode_secs = mode_delta.total_seconds()
+            print({
+                "mode": mode,
+                "best_val_acc": metrics["best_val_acc"],
+                "num_classes": metrics["num_classes"],
+                "start": mode_start.isoformat(),
+                "end": mode_end.isoformat(),
+                "duration": str(mode_delta),
+                "duration_seconds": round(mode_secs, 3),
+            })
+        else:
+            print(f"Skipping training for mode '{mode}'.")
 
-        print(f"\n=== Training configuration: finetune_mode={mode} ===")
-        metrics = train_from_config(cfg)
-        mode_end = datetime.now()
-        mode_delta = mode_end - mode_start
-        mode_secs = mode_delta.total_seconds()
-        print({
-            "mode": mode,
-            "best_val_acc": metrics["best_val_acc"],
-            "num_classes": metrics["num_classes"],
-            "start": mode_start.isoformat(),
-            "end": mode_end.isoformat(),
-            "duration": str(mode_delta),
-            "duration_seconds": round(mode_secs, 3),
-        })
+        # Inference on Kaggle test set for this mode (best model)
+        if RUN_INFERENCE:
+            try:
+                # Prefer local folder inference as requested
+                out_csv = run_inference_on_folder(
+                    cfg,
+                    cfg.models_dir / cfg.best_model_filename,
+                    INFER_INPUT_DIR,
+                    INFER_OUTPUT_DIR / mode,
+                    batch_size=max(32, BATCH_SIZE),
+                )
+                if out_csv is not None:
+                    print(f"Inference complete ({mode}). CSV: {out_csv}")
+                    print(f"Copied images and JSONs under: {INFER_OUTPUT_DIR / mode}")
+                else:
+                    print("No images found in data/inference/input. Skipping inference.")
+            except Exception as e:
+                print(f"Inference error for mode '{mode}': {e}")
+        else:
+            print(f"Skipping inference for mode '{mode}'.")
 
     total_end = datetime.now()
     total_delta = total_end - total_start
