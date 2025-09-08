@@ -167,6 +167,8 @@ def run_epoch(
             targets = targets.to(device, non_blocking=True)
             if use_channels_last:
                 images = images.contiguous(memory_format=torch.channels_last)
+            else:
+                images = images.contiguous()
 
             optimizer.zero_grad(set_to_none=True)
             with autocast(device_type=amp_device, dtype=amp_dtype, enabled=use_amp):
@@ -217,7 +219,8 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
     amp_dtype = torch.float16
     scaler = GradScaler(enabled=is_cuda)
 
-    use_channels_last = is_cuda or is_mps
+    # Use channels_last only for CUDA, not MPS (can cause view issues)
+    use_channels_last = is_cuda
     pin_memory = is_cuda
 
     # Logging
@@ -298,7 +301,7 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
                 optimizer_eval = AdamW(eval_model.parameters(), lr=1e-6, weight_decay=0.0)  # dummy, not stepped
                 _, baseline_acc, _, _ = run_epoch(
                     eval_model,
-                    val_loader=DataLoader(
+                    DataLoader(
                         val_ds,
                         batch_size=cfg.batch_size,
                         shuffle=False,
@@ -307,8 +310,8 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
                         prefetch_factor=prefetch,
                         pin_memory=pin_memory,
                     ),
-                    criterion=criterion_eval,
-                    optimizer=optimizer_eval,
+                    criterion_eval,
+                    optimizer_eval,
                     train=False,
                     device=device,
                     use_channels_last=use_channels_last,
