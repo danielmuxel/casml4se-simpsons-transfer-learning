@@ -23,7 +23,7 @@ RESIZE = 256
 IMG_SIZE = 224
 USE_COLOR_JITTER = True
 
-EPOCHS = 1
+EPOCHS = 12
 EARLY_STOP = 5
 FINETUNE_MODES = ["linear_probe", "last2_blocks", "full"]  # three configurations
 

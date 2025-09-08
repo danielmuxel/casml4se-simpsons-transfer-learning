@@ -195,6 +195,29 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
         except Exception:
             img_src = str(it.image_path)
 
+        # Build status icon overlay based on correctness
+        status_icon = ""
+        if it.correctness == "correct":
+            status_icon = (
+                '<div class="absolute top-2 right-2" aria-label="Prediction correct" title="Prediction correct">'
+                '<div class="rounded-full bg-white border-2 border-green-600 p-1 shadow">'
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 text-green-600" aria-hidden="true">'
+                '<path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.25 7.25a1 1 0 01-1.42 0L3.296 9.57a1 1 0 111.408-1.42l3.04 3.04 6.54-6.54a1 1 0 011.42 0z" clip-rule="evenodd" />'
+                '</svg>'
+                '</div>'
+                '</div>'
+            )
+        elif it.correctness == "incorrect":
+            status_icon = (
+                '<div class="absolute top-2 right-2" aria-label="Prediction incorrect" title="Prediction incorrect">'
+                '<div class="rounded-full bg-white border-2 border-red-600 p-1 shadow">'
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 text-red-600" aria-hidden="true">'
+                '<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />'
+                '</svg>'
+                '</div>'
+                '</div>'
+            )
+
         if not img_src:
             # Fallback to JSON path basename (no image)
             img_alt = html.escape(it.json_path.name)
@@ -212,8 +235,9 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
         cards.append(
             """
             <article class="{article_classes}" tabindex="0" role="article" aria-label="Inference item">
-              <div class="bg-white">
+              <div class="bg-white relative">
                 {img_tag}
+                {status_icon}
               </div>
               <div class="p-4 space-y-2">
                 <div class="flex items-center justify-between">
@@ -237,7 +261,7 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
                 </div>
               </div>
             </article>
-            """.replace("{img_tag}", img_tag).format(idx=idx, label=label, prob=prob, json_link=json_link, label_classes=label_classes, file_name=file_name, article_classes=article_classes)
+            """.replace("{img_tag}", img_tag).replace("{status_icon}", status_icon).format(idx=idx, label=label, prob=prob, json_link=json_link, label_classes=label_classes, file_name=file_name, article_classes=article_classes)
         )
 
     cards_html = "\n".join(cards) if cards else (
@@ -276,7 +300,36 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
           img.alt = item.json_name;
           img.loading = 'lazy';
           img.className = 'w-full h-48 object-contain bg-gray-50';
+          imgWrap.classList.add('relative');
           imgWrap.appendChild(img);
+
+          // Status icon overlay
+          if (item.correctness === 'correct' || item.correctness === 'incorrect') {
+            const outer = document.createElement('div');
+            outer.className = 'absolute top-2 right-2';
+            outer.setAttribute('aria-label', item.correctness === 'correct' ? 'Prediction correct' : 'Prediction incorrect');
+            outer.setAttribute('title', item.correctness === 'correct' ? 'Prediction correct' : 'Prediction incorrect');
+            const circle = document.createElement('div');
+            circle.className = item.correctness === 'correct' ? 'rounded-full bg-white border-2 border-green-600 p-1 shadow' : 'rounded-full bg-white border-2 border-red-600 p-1 shadow';
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 20 20');
+            svg.setAttribute('fill', 'currentColor');
+            svg.setAttribute('class', item.correctness === 'correct' ? 'h-5 w-5 text-green-600' : 'h-5 w-5 text-red-600');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            if (item.correctness === 'correct') {
+              path.setAttribute('fill-rule', 'evenodd');
+              path.setAttribute('clip-rule', 'evenodd');
+              path.setAttribute('d', 'M16.704 5.29a1 1 0 010 1.42l-7.25 7.25a1 1 0 01-1.42 0L3.296 9.57a1 1 0 111.408-1.42l3.04 3.04 6.54-6.54a1 1 0 011.42 0z');
+            } else {
+              path.setAttribute('fill-rule', 'evenodd');
+              path.setAttribute('clip-rule', 'evenodd');
+              path.setAttribute('d', 'M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z');
+            }
+            svg.appendChild(path);
+            circle.appendChild(svg);
+            outer.appendChild(circle);
+            imgWrap.appendChild(outer);
+          }
         } else {
           const noimg = document.createElement('div');
           noimg.className = 'w-full h-48 bg-gray-100 flex items-center justify-center text-gray-500 text-sm';
