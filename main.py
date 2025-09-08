@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime
+import os
 
 from train_simpsons_optimized import (
     TrainingConfig,
@@ -11,36 +12,77 @@ from tools.prepare_data import prepare_data
 from tools.generate_overview import find_items as gen_find_items, render_html as gen_render_html, write_manifest as gen_write_manifest, OUTPUT_ROOT as GEN_OUTPUT_ROOT
 
 # -----------------------------
-# Simple training variables
+# Simple training variables (env-overridable)
 # -----------------------------
-DATA_DIR = Path("data/processed")
-MODELS_DIR = Path("models")
-INFER_INPUT_DIR = Path("data/inference/input")
-INFER_OUTPUT_DIR = Path("data/inference/output")
 
-SEED = 42
-BATCH_SIZE = 32
-NUM_WORKERS = 4
-RESIZE = 256
-IMG_SIZE = 224
-USE_COLOR_JITTER = True
+def _get_env_bool(name: str, default: bool) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 
-EPOCHS = 2
-EARLY_STOP = 5
-FINETUNE_MODES = ["linear_probe", "last2_blocks", "full"]  # three configurations
+
+def _get_env_int(name: str, default: int) -> int:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
+
+def _get_env_float(name: str, default: float) -> float:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except ValueError:
+        return default
+
+
+def _get_env_path(name: str, default: Path) -> Path:
+    val = os.getenv(name)
+    return Path(val) if val else default
+
+
+def _get_env_list(name: str, default: list[str]) -> list[str]:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    items = [item.strip() for item in val.split(",")]
+    return [i for i in items if i]
+
+
+DATA_DIR = _get_env_path("DATA_DIR", Path("data/processed"))
+MODELS_DIR = _get_env_path("MODELS_DIR", Path("models"))
+INFER_INPUT_DIR = _get_env_path("INFER_INPUT_DIR", Path("data/inference/input"))
+INFER_OUTPUT_DIR = _get_env_path("INFER_OUTPUT_DIR", Path("data/inference/output"))
+
+SEED = _get_env_int("SEED", 42)
+BATCH_SIZE = _get_env_int("BATCH_SIZE", 32)
+NUM_WORKERS = _get_env_int("NUM_WORKERS", 4)
+RESIZE = _get_env_int("RESIZE", 256)
+IMG_SIZE = _get_env_int("IMG_SIZE", 224)
+USE_COLOR_JITTER = _get_env_bool("USE_COLOR_JITTER", True)
+
+EPOCHS = _get_env_int("EPOCHS", 2)
+EARLY_STOP = _get_env_int("EARLY_STOP", 5)
+FINETUNE_MODES = _get_env_list("FINETUNE_MODES", ["linear_probe", "last2_blocks", "full"])  # three configurations
 
 # Execution controls
-RUN_TRAINING = False
-RUN_INFERENCE = True
+RUN_TRAINING = _get_env_bool("RUN_TRAINING", False)
+RUN_INFERENCE = _get_env_bool("RUN_INFERENCE", True)
 
-LR_BACKBONE = 3e-4
-LR_HEAD = 1e-3
-WEIGHT_DECAY = 1e-4
-ROP_FACTOR = 0.5
-ROP_PATIENCE = 2
+LR_BACKBONE = _get_env_float("LR_BACKBONE", 3e-4)
+LR_HEAD = _get_env_float("LR_HEAD", 1e-3)
+WEIGHT_DECAY = _get_env_float("WEIGHT_DECAY", 1e-4)
+ROP_FACTOR = _get_env_float("ROP_FACTOR", 0.5)
+ROP_PATIENCE = _get_env_int("ROP_PATIENCE", 2)
 
-BEST_MODEL = "simpsons_effb0_best_v2.pt"  # base name; per-mode suffixes will be added
-CM_FILE = "confusion_matrix.npy"         # base name; per-mode suffixes will be added
+BEST_MODEL = os.getenv("BEST_MODEL", "simpsons_effb0_best_v2.pt")  # base name; per-mode suffixes will be added
+CM_FILE = os.getenv("CM_FILE", "confusion_matrix.npy")         # base name; per-mode suffixes will be added
 
 
 def main() -> None:
