@@ -281,6 +281,51 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
         pin_memory=pin_memory,
     )
 
+    # Optionally evaluate an existing checkpoint to establish baseline best accuracy
+    baseline_acc: Optional[float] = None
+    existing_ckpt = cfg.models_dir / cfg.best_model_filename
+    try:
+        if existing_ckpt.exists():
+            # Load model from checkpoint for evaluation
+            eval_model, ckpt_classes, _ = load_model_for_inference(
+                existing_ckpt, device, resize_size=cfg.resize_size, image_size=cfg.image_size
+            )
+            # Ensure class order matches the current dataset
+            if list(ckpt_classes) == list(train_ds.classes):
+                if use_channels_last:
+                    eval_model = eval_model.to(memory_format=torch.channels_last)
+                criterion_eval = nn.CrossEntropyLoss()
+                optimizer_eval = AdamW(eval_model.parameters(), lr=1e-6, weight_decay=0.0)  # dummy, not stepped
+                _, baseline_acc, _, _ = run_epoch(
+                    eval_model,
+                    val_loader=DataLoader(
+                        val_ds,
+                        batch_size=cfg.batch_size,
+                        shuffle=False,
+                        num_workers=cfg.num_workers,
+                        persistent_workers=(cfg.num_workers > 0),
+                        prefetch_factor=prefetch,
+                        pin_memory=pin_memory,
+                    ),
+                    criterion=criterion_eval,
+                    optimizer=optimizer_eval,
+                    train=False,
+                    device=device,
+                    use_channels_last=use_channels_last,
+                    use_amp=use_amp,
+                    amp_device=amp_device,
+                    amp_dtype=amp_dtype,
+                    scaler=scaler,
+                )
+                logger.info("Existing checkpoint baseline val_acc=%.4f (%s)", baseline_acc, str(existing_ckpt))
+            else:
+                logger.info(
+                    "Existing checkpoint found but classes mismatch; skipping baseline eval. ckpt_classes=%d, current_classes=%d",
+                    len(ckpt_classes), len(train_ds.classes),
+                )
+    except Exception as e:
+        logger.info("Baseline evaluation failed: %s", str(e))
+
     # Model
     num_classes = len(train_ds.classes)
     weights = models.EfficientNet_B0_Weights.IMAGENET1K_V1
@@ -309,7 +354,7 @@ def train_from_config(cfg: TrainingConfig) -> Dict[str, float]:
     criterion = nn.CrossEntropyLoss()
 
     # Train loop
-    best_val_acc = 0.0
+    best_val_acc = float(baseline_acc) if baseline_acc is not None else 0.0
     patience = 0
     y_true_last: np.ndarray = np.array([])
     y_pred_last: np.ndarray = np.array([])

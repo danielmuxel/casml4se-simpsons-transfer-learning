@@ -7,6 +7,8 @@ from train_simpsons_optimized import (
     run_inference_on_kaggle_testset,
     run_inference_on_folder,
 )
+from tools.prepare_data import prepare_data
+from tools.generate_overview import find_items as gen_find_items, render_html as gen_render_html, write_manifest as gen_write_manifest, OUTPUT_ROOT as GEN_OUTPUT_ROOT
 
 # -----------------------------
 # Simple training variables
@@ -23,7 +25,7 @@ RESIZE = 256
 IMG_SIZE = 224
 USE_COLOR_JITTER = True
 
-EPOCHS = 12
+EPOCHS = 2
 EARLY_STOP = 5
 FINETUNE_MODES = ["linear_probe", "last2_blocks", "full"]  # three configurations
 
@@ -44,6 +46,12 @@ CM_FILE = "confusion_matrix.npy"         # base name; per-mode suffixes will be 
 def main() -> None:
     total_start = datetime.now()
     print(f"\n=== Overall run start: {total_start.isoformat()} ===")
+
+    # Ensure data is prepared (download + split) if missing
+    try:
+        prepare_data()
+    except Exception as e:
+        print(f"Data preparation warning: {e}")
 
     for mode in FINETUNE_MODES:
         mode_start = datetime.now()
@@ -108,6 +116,17 @@ def main() -> None:
                 if out_csv is not None:
                     print(f"Inference complete ({mode}). CSV: {out_csv}")
                     print(f"Copied images and JSONs under: {INFER_OUTPUT_DIR / mode}")
+                    # Generate HTML overview automatically
+                    try:
+                        items = gen_find_items(mode)
+                        html_text = gen_render_html(mode, items, f"Inference Overview — {mode}")
+                        out_dir = GEN_OUTPUT_ROOT / mode
+                        out_file = out_dir / "index.html"
+                        out_file.write_text(html_text)
+                        gen_write_manifest(mode, items)
+                        print(f"Overview generated: {out_file.resolve()}")
+                    except Exception as e:
+                        print(f"Overview generation warning for mode '{mode}': {e}")
                 else:
                     print("No images found in data/inference/input. Skipping inference.")
             except Exception as e:

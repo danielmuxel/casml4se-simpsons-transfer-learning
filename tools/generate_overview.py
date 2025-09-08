@@ -166,6 +166,74 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
     page_title = title or f"Inference Overview — {subfolder}"
     safe_title = html.escape(page_title)
 
+    # Compute overview statistics
+    total_items = len(items)
+    correct_items = [it for it in items if it.correctness == "correct"]
+    incorrect_items = [it for it in items if it.correctness == "incorrect"]
+
+    correct_count = len(correct_items)
+    incorrect_count = len(incorrect_items)
+
+    # Group people for correct/incorrect
+    correct_groups: Dict[str, int] = {}
+    for it in correct_items:
+        label = it.expected_label or it.prediction_label or "unknown"
+        correct_groups[label] = correct_groups.get(label, 0) + 1
+
+    incorrect_groups: Dict[str, int] = {}
+    for it in incorrect_items:
+        label = it.expected_label or "unknown"
+        incorrect_groups[label] = incorrect_groups.get(label, 0) + 1
+
+    # Sort groups by count desc, then label asc
+    sorted_correct_groups: List[Tuple[str, int]] = sorted(correct_groups.items(), key=lambda kv: (-kv[1], kv[0]))
+    sorted_incorrect_groups: List[Tuple[str, int]] = sorted(incorrect_groups.items(), key=lambda kv: (-kv[1], kv[0]))
+
+    def build_group_list(groups: List[Tuple[str, int]]) -> str:
+        if not groups:
+            return '<div class="text-gray-500 text-sm">No items</div>'
+        rows: List[str] = []
+        for label, count in groups:
+            rows.append(
+                f'<li class="flex items-center justify-between py-1">'
+                f'<span class="text-sm">{html.escape(str(label))}</span>'
+                f'<span class="font-mono text-sm text-gray-700">{count}</span>'
+                f'</li>'
+            )
+        return '<ul class="divide-y divide-gray-200">' + "\n".join(rows) + '</ul>'
+
+    correct_list_html = build_group_list(sorted_correct_groups)
+    incorrect_list_html = build_group_list(sorted_incorrect_groups)
+
+    summary_html = f"""
+    <section aria-label="Overview statistics" class="mb-6 space-y-4">
+      <div class=\"grid grid-cols-1 sm:grid-cols-3 gap-3\">
+        <div class=\"rounded-lg border bg-white p-4\">
+          <div class=\"text-sm text-gray-500\">Total items</div>
+          <div class=\"mt-1 text-2xl font-semibold\">{total_items}</div>
+        </div>
+        <div class=\"rounded-lg border bg-white p-4\">
+          <div class=\"text-sm text-gray-500\">Correct</div>
+          <div class=\"mt-1 text-2xl font-semibold text-green-700\">{correct_count}</div>
+        </div>
+        <div class=\"rounded-lg border bg-white p-4\">
+          <div class=\"text-sm text-gray-500\">Incorrect</div>
+          <div class=\"mt-1 text-2xl font-semibold text-red-700\">{incorrect_count}</div>
+        </div>
+      </div>
+      <div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
+        <div class=\"rounded-lg border bg-white p-4\">
+          <h2 class=\"text-base font-medium mb-2\">Correct by person</h2>
+          {correct_list_html}
+        </div>
+        <div class=\"rounded-lg border bg-white p-4\">
+          <h2 class=\"text-base font-medium mb-2\">Incorrect by person</h2>
+          {incorrect_list_html}
+        </div>
+      </div>
+    </section>
+    """
+
     # Build cards
     cards: List[str] = []
     for it in items:
@@ -405,6 +473,7 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
           <button onclick="handleRefresh()" class="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white" aria-label="Refresh from manifest" title="Refresh from manifest.json">Refresh</button>
         </div>
       </header>
+      {summary_html}
       <section id="grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {cards_html}
       </section>
