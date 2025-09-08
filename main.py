@@ -62,7 +62,7 @@ INFER_OUTPUT_DIR = _get_env_path("INFER_OUTPUT_DIR", Path("data/inference/output
 
 SEED = _get_env_int("SEED", 42)
 BATCH_SIZE = _get_env_int("BATCH_SIZE", 32)
-NUM_WORKERS = _get_env_int("NUM_WORKERS", 4)
+NUM_WORKERS = _get_env_int("NUM_WORKERS", 8)
 RESIZE = _get_env_int("RESIZE", 256)
 IMG_SIZE = _get_env_int("IMG_SIZE", 224)
 USE_COLOR_JITTER = _get_env_bool("USE_COLOR_JITTER", True)
@@ -72,7 +72,7 @@ EARLY_STOP = _get_env_int("EARLY_STOP", 5)
 FINETUNE_MODES = _get_env_list("FINETUNE_MODES", ["linear_probe", "last2_blocks", "full"])  # three configurations
 
 # Execution controls
-RUN_TRAINING = _get_env_bool("RUN_TRAINING", False)
+RUN_TRAINING = _get_env_bool("RUN_TRAINING", True)
 RUN_INFERENCE = _get_env_bool("RUN_INFERENCE", True)
 
 LR_BACKBONE = _get_env_float("LR_BACKBONE", 3e-4)
@@ -146,33 +146,38 @@ def main() -> None:
 
         # Inference on Kaggle test set for this mode (best model)
         if RUN_INFERENCE:
-            try:
-                # Prefer local folder inference as requested
-                out_csv = run_inference_on_folder(
-                    cfg,
-                    cfg.models_dir / cfg.best_model_filename,
-                    INFER_INPUT_DIR,
-                    INFER_OUTPUT_DIR / mode,
-                    batch_size=max(32, BATCH_SIZE),
-                )
-                if out_csv is not None:
-                    print(f"Inference complete ({mode}). CSV: {out_csv}")
-                    print(f"Copied images and JSONs under: {INFER_OUTPUT_DIR / mode}")
-                    # Generate HTML overview automatically
-                    try:
-                        items = gen_find_items(mode)
-                        html_text = gen_render_html(mode, items, f"Inference Overview — {mode}")
-                        out_dir = GEN_OUTPUT_ROOT / mode
-                        out_file = out_dir / "index.html"
-                        out_file.write_text(html_text)
-                        gen_write_manifest(mode, items)
-                        print(f"Overview generated: {out_file.resolve()}")
-                    except Exception as e:
-                        print(f"Overview generation warning for mode '{mode}': {e}")
-                else:
-                    print("No images found in data/inference/input. Skipping inference.")
-            except Exception as e:
-                print(f"Inference error for mode '{mode}': {e}")
+            model_path = cfg.models_dir / cfg.best_model_filename
+            if not model_path.exists():
+                print(f"Model not found: {model_path}. Skipping inference for mode '{mode}'.")
+                print(f"Run training first or set RUN_TRAINING=true to train the model.")
+            else:
+                try:
+                    # Prefer local folder inference as requested
+                    out_csv = run_inference_on_folder(
+                        cfg,
+                        model_path,
+                        INFER_INPUT_DIR,
+                        INFER_OUTPUT_DIR / mode,
+                        batch_size=max(32, BATCH_SIZE),
+                    )
+                    if out_csv is not None:
+                        print(f"Inference complete ({mode}). CSV: {out_csv}")
+                        print(f"Copied images and JSONs under: {INFER_OUTPUT_DIR / mode}")
+                        # Generate HTML overview automatically
+                        try:
+                            items = gen_find_items(mode)
+                            html_text = gen_render_html(mode, items, f"Inference Overview — {mode}")
+                            out_dir = GEN_OUTPUT_ROOT / mode
+                            out_file = out_dir / "index.html"
+                            out_file.write_text(html_text)
+                            gen_write_manifest(mode, items)
+                            print(f"Overview generated: {out_file.resolve()}")
+                        except Exception as e:
+                            print(f"Overview generation warning for mode '{mode}': {e}")
+                    else:
+                        print("No images found in data/inference/input. Skipping inference.")
+                except Exception as e:
+                    print(f"Inference error for mode '{mode}': {e}")
         else:
             print(f"Skipping inference for mode '{mode}'.")
 
