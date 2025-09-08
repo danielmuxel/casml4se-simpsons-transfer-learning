@@ -174,6 +174,10 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
     correct_count = len(correct_items)
     incorrect_count = len(incorrect_items)
 
+    # Percentages
+    accuracy_pct: float = (correct_count / total_items * 100.0) if total_items else 0.0
+    accuracy_str = f"{accuracy_pct:.2f}%"
+
     # Group people for correct/incorrect
     correct_groups: Dict[str, int] = {}
     for it in correct_items:
@@ -207,7 +211,7 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
 
     summary_html = f"""
     <section aria-label="Overview statistics" class="mb-6 space-y-4">
-      <div class=\"grid grid-cols-1 sm:grid-cols-3 gap-3\">
+      <div class=\"grid grid-cols-1 sm:grid-cols-4 gap-3\">
         <div class=\"rounded-lg border bg-white p-4\">
           <div class=\"text-sm text-gray-500\">Total items</div>
           <div class=\"mt-1 text-2xl font-semibold\">{total_items}</div>
@@ -219,6 +223,10 @@ def render_html(subfolder: str, items: List[InferenceItem], title: Optional[str]
         <div class=\"rounded-lg border bg-white p-4\">
           <div class=\"text-sm text-gray-500\">Incorrect</div>
           <div class=\"mt-1 text-2xl font-semibold text-red-700\">{incorrect_count}</div>
+        </div>
+        <div class=\"rounded-lg border bg-white p-4\">
+          <div class=\"text-sm text-gray-500\">Accuracy</div>
+          <div class=\"mt-1 text-2xl font-semibold text-blue-700\">{accuracy_str}</div>
         </div>
       </div>
       <div class=\"grid grid-cols-1 md:grid-cols-2 gap-4\">

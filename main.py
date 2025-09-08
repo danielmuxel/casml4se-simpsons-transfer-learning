@@ -30,7 +30,7 @@ EARLY_STOP = 5
 FINETUNE_MODES = ["linear_probe", "last2_blocks", "full"]  # three configurations
 
 # Execution controls
-RUN_TRAINING = True
+RUN_TRAINING = False
 RUN_INFERENCE = True
 
 LR_BACKBONE = 3e-4
