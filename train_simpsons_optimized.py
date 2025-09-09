@@ -664,6 +664,10 @@ def run_inference_on_kaggle_testset(
 
     # Also write per-image JSON files
     json_out_dir = cfg.models_dir / f"inference_json_{cfg.finetune_mode}"
+    # Clear existing JSON directory first
+    if json_out_dir.exists():
+        shutil.rmtree(json_out_dir)
+        print(f"Cleared existing JSON directory: {json_out_dir}")
     json_out_dir.mkdir(parents=True, exist_ok=True)
     for n, i, p in zip(names, pred_idx.tolist(), probs.tolist()):
         record = {
@@ -744,6 +748,10 @@ def run_inference_on_folder(
         ),
     )
 
+    # Clear output directory first to avoid mixing results from different runs
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+        print(f"Cleared existing output directory: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_path = output_dir / "predictions.csv"
     with csv_path.open("w", newline="") as fcsv:
