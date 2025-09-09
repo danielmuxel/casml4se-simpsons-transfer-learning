@@ -55,6 +55,39 @@ def _get_env_list(name: str, default: list[str]) -> list[str]:
     return [i for i in items if i]
 
 
+def _load_env_if_exists() -> None:
+    """Load environment variables from a local .env file if present.
+
+    - Only sets variables that are not already in the environment (env overrides .env).
+    - Supports lines like `KEY=VALUE`, optional `export KEY=VALUE`, ignores comments and blanks.
+    - Strips surrounding single/double quotes in values.
+    """
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for raw_line in env_path.read_text().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[7:].strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+            os.environ.setdefault(key, value)
+    except Exception as e:
+        print(f"Warning: failed to load .env: {e}")
+
+
+# Load .env before reading environment-backed config values
+_load_env_if_exists()
+
+
 DATA_DIR = _get_env_path("DATA_DIR", Path("data/processed"))
 MODELS_DIR = _get_env_path("MODELS_DIR", Path("models"))
 INFER_INPUT_DIR = _get_env_path("INFER_INPUT_DIR", Path("data/inference/input"))
